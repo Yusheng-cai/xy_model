@@ -4,23 +4,26 @@
 #include <vector>
 #include <iostream>
 #include "xy_model.h"
+#include <map>
 #include <omp.h>
 
 
 #define PI 3.14159265
 #define RAD 3.14159265/180.0
+#define R 0.008314
 
-
-double xy_model::randomangle(){
+double xy_model::randnum(float low, float high){
 	/*
-	 * Function that generates a random angle between -180 and 180
+	 * Function that generates a uniformly generated random number between low and high
+	 *
+	 * Args:
+	 * low(float): The lower bound of the random number 
+	 * high(float): THe upper bound of the random number 
 	 *
 	 * Returns:
-	 * RANDANGLE(double): A random number between -180 and 180
+	 * (double): A random number between 0 and 1
 	 */
-	double RANDANGLE = -180.0 + (double) 360.0*rand()/RAND_MAX;
-	
-	return RANDANGLE;
+	return low + (double) (high-low)*rand()/RAND_MAX;	
 }
 
 double xy_model::rotatespin(const double &angle){
@@ -35,7 +38,7 @@ double xy_model::rotatespin(const double &angle){
 	 * rotated_angle(double): The rotated angle by a random number of degrees
 	 */
 	double rotated_angle;
-	double RANDANGLE = randomangle();
+	double RANDANGLE = randnum(-180,180);
 	
 	//Rotate clockwise if it the negative 
 	if ((angle + RANDANGLE) < -180){
@@ -67,7 +70,7 @@ std::vector<std::vector<double>> xy_model::Random_initialize(int N){
 	// Randomly initialize lattice
 	for (int i=0;i<N;i++){
 		for (int j=0;j<N;j++){
-			lattice[i][j] = randomangle();
+			lattice[i][j] = randnum(-180.0,180.0);
 		}
 	}
 
@@ -141,7 +144,7 @@ double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,doubl
 	
 
 
-	return energy;
+	return energy/2.0;
 }
 
 double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, double updated_spin,int i, int j,double J){
@@ -161,7 +164,7 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
 	double cols=lattice[0].size();
 	double uval,dval,lval,rval;
 	
-	double currval = lattice[i][j];
+	double currspin = lattice[i][j];
 
 	if(i == 0){
 		uval=lattice[rows-1][j];
@@ -194,14 +197,14 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
 		rval = lattice[i][j+1];
 	}
 
-	double dE =J*(cos((currval-rval)*RAD) - cos((updated_spin-rval)*RAD)+\
-			cos((currval-lval)*RAD) - cos((updated_spin-lval)*RAD)+\
-			cos((currval-uval)*RAD) - cos((updated_spin-uval)*RAD)+cos((currval-dval)*RAD) - cos((updated_spin - dval)*RAD));	
+	double dE =J*(cos((currspin-rval)*RAD) - cos((updated_spin-rval)*RAD)+\
+			cos((currspin-lval)*RAD) - cos((updated_spin-lval)*RAD)+\
+			cos((currspin-uval)*RAD) - cos((updated_spin-uval)*RAD)+cos((currspin-dval)*RAD) - cos((updated_spin - dval)*RAD));	
 	
        return dE;	
 }	
 
-void xy_model::run(int N,int nsweeps,double J){
+void xy_model::run(int N,int nsweeps,double J,double T){
 	/*
 	 * Run function for the MCMC of xy model
 	 * 
@@ -209,6 +212,7 @@ void xy_model::run(int N,int nsweeps,double J){
 	 * N(int): The number of elements in each direction
 	 * nsweeps(int): Number of sweeps to be performed 
 	 * J(double): The energy constant in -J*cos(thetai-thetaj)
+	 * T(double): The temperature of the system
 	 */
 
 	omp_set_num_threads(8);
@@ -217,12 +221,30 @@ void xy_model::run(int N,int nsweeps,double J){
 
 	// Calculate initial energy
 	double E = E_initial(lattice,J);
+	double RT = R*T;
 
 	for(int i=0;i<N;i++){
 		for(int j=0;j<N;j++){
 			double updated_spin = rotatespin(lattice[i][j]); 
 			double dE = calc_deltaE(lattice,updated_spin,i,j,J);
-			std::cout << dE << std::endl;
+			if (dE < 0){
+				lattice[i][j] = updated_spin;
+				E = E + dE;
+				std::cout << "Accepted because dE is negative and dE: " << dE << std::endl;
+			}
+			else{
+				std::cout << "dE is positive and is " << dE << std::endl;
+				double factor=exp(-dE/(RT));
+				double r = randnum(0.0,1.0);
+				std::cout << "randnum is " << r << " and factor is " << factor << std::endl;
+				
+				if (r < factor){
+					lattice[i][j] = updated_spin;
+					E = E + dE;
+					std::cout << "Accepted although dE is positive " << dE << std::endl;
+				}
+			}
+			std::cout << E << std::endl;
 		}
 	}
 }
