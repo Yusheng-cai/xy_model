@@ -1,13 +1,10 @@
+#include "xy_model.h"
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <vector>
-#include <iostream>
-#include "xy_model.h"
-#include <map>
 #include <omp.h>
-#include <fstream>
-#include <string>
 
 
 #define PI 3.14159265
@@ -99,8 +96,6 @@ double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,doubl
 	rows = lattice.size();
 	cols = lattice[0].size();
 
-	double start=omp_get_wtime();
-
 	#pragma omp parallel for shared(lattice) reduction(+:energy)	
 	for(int k=0;k<rows*cols;k++){
 		int i=k/rows;
@@ -138,13 +133,9 @@ double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,doubl
 			rval = lattice[i][j+1];
 		}
 
-		std::cout << -J*(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
-				cos((currval-dval)*RAD)) << std::endl;	
 		energy +=-J*(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
 				cos((currval-dval)*RAD));	
 	}
-	double end=omp_get_wtime();
-	std::cout << end-start<<std::endl;
 
 	return energy/2.0;
 }
@@ -225,15 +216,8 @@ void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::
 	std::ofstream energyfile;
 	std::ofstream configfile;
 	energyfile.open(ENERGY,std::ios::out);
-	configfile.open(CONFIG,std::ios::out);
-
-	for(int i=0;i<N;i++){
-		for(int j=0;j<N;j++){
-			configfile << lattice[i][j] << "\t";
-		}
-		configfile << "\n";
-	}
-
+	energyfile << "Energy\tAverage Cosine\tAverage Sine";
+	configfile.open(CONFIG,std::ios::out);	
 
 	// Calculate initial energy
 	double E = E_initial(lattice,J);
@@ -241,8 +225,6 @@ void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::
 	double RT = R*T;	
 	
 	for(int m=0;m<nsweeps;m++){
-		configfile << "nsweep  " << m+1 << "\n";
-		energyfile << "nsweep  " << m+1 << "\n";
 		for(int k=0;k<N*N;k++){
 			int num = (int)round(randnum(0.0,1.0)*(N*N-1));
 			int i=num/N;
@@ -254,10 +236,6 @@ void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::
 			// if dE is less than 0, then accept the move
 			if (dE < 0){
 				lattice[i][j] = updated_spin;
-				configfile << i << "\t";
-				configfile << j << "\t";
-				configfile << lattice[i][j] << "\n";
-
 				E = E + dE;
 				// std::cout << "Accepted because dE is negative and dE: " << dE << std::endl;
 			}
@@ -267,24 +245,22 @@ void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::
 				
 				if (r < factor){
 					lattice[i][j] = updated_spin;
-					configfile << i << "\t";
-					configfile << j << "\t";
-					configfile << lattice[i][j] << "\n";
-
 
 					E = E + dE;
 					// std::cout << "dE is positive, dE is " << dE << "factor is " << factor << "randnum is " << r << std::endl;
 				}
-				else{
-					configfile << i << "\t";
-					configfile << j << "\t";
-					configfile << "Unchanged" << "\n";	
-				}
+				
 			}
-			energyfile << E;
-			energyfile << "\n";
+			energyfile << E <<  "\n";
+		}
+		for(int i=0;i<N;i++){
+			for(int j=0;j<N;j++){
+				configfile << lattice[i][j] << "\t";
+		}
+			configfile << "\n";
 		}
 	}
+
 	energyfile.close();
 	configfile.close();
 	std::cout << "Final energy is " << E << std::endl;
