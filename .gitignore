@@ -32,3 +32,5 @@
 *.app
 
 MCMC
+.DS_Store
+src/*.dat
