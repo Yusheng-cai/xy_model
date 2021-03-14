@@ -6,13 +6,15 @@
 #include "xy_model.h"
 #include <map>
 #include <omp.h>
+#include <fstream>
+#include <string>
 
 
 #define PI 3.14159265
 #define RAD 3.14159265/180.0
 #define R 0.008314
 
-double xy_model::randnum(float low, float high){
+double xy_model::randnum(double low, double high){
 	/*
 	 * Function that generates a uniformly generated random number between low and high
 	 *
@@ -136,13 +138,13 @@ double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,doubl
 			rval = lattice[i][j+1];
 		}
 
+		std::cout << -J*(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
+				cos((currval-dval)*RAD)) << std::endl;	
 		energy +=-J*(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
 				cos((currval-dval)*RAD));	
 	}
 	double end=omp_get_wtime();
 	std::cout << end-start<<std::endl;
-	
-
 
 	return energy/2.0;
 }
@@ -204,7 +206,7 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
        return dE;	
 }	
 
-void xy_model::run(int N,int nsweeps,double J,double T){
+void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::string CONFIG){
 	/*
 	 * Run function for the MCMC of xy model
 	 * 
@@ -214,37 +216,76 @@ void xy_model::run(int N,int nsweeps,double J,double T){
 	 * J(double): The energy constant in -J*cos(thetai-thetaj)
 	 * T(double): The temperature of the system
 	 */
-
+	
 	omp_set_num_threads(8);
 	// Initialized random lattice
 	std::vector<std::vector<double>> lattice=Random_initialize(N);
 
-	// Calculate initial energy
-	double E = E_initial(lattice,J);
-	double RT = R*T;
+	// create the files to be written to 
+	std::ofstream energyfile;
+	std::ofstream configfile;
+	energyfile.open(ENERGY,std::ios::out);
+	configfile.open(CONFIG,std::ios::out);
 
 	for(int i=0;i<N;i++){
 		for(int j=0;j<N;j++){
+			configfile << lattice[i][j] << "\t";
+		}
+		configfile << "\n";
+	}
+
+
+	// Calculate initial energy
+	double E = E_initial(lattice,J);
+	std::cout << "Initial E is " << E << std::endl;
+	double RT = R*T;	
+	
+	for(int m=0;m<nsweeps;m++){
+		configfile << "nsweep  " << m+1 << "\n";
+		energyfile << "nsweep  " << m+1 << "\n";
+		for(int k=0;k<N*N;k++){
+			int num = (int)round(randnum(0.0,1.0)*(N*N-1));
+			int i=num/N;
+			int j=num%N;
+			
 			double updated_spin = rotatespin(lattice[i][j]); 
 			double dE = calc_deltaE(lattice,updated_spin,i,j,J);
+			
+			// if dE is less than 0, then accept the move
 			if (dE < 0){
 				lattice[i][j] = updated_spin;
+				configfile << i << "\t";
+				configfile << j << "\t";
+				configfile << lattice[i][j] << "\n";
+
 				E = E + dE;
-				std::cout << "Accepted because dE is negative and dE: " << dE << std::endl;
+				// std::cout << "Accepted because dE is negative and dE: " << dE << std::endl;
 			}
 			else{
-				std::cout << "dE is positive and is " << dE << std::endl;
 				double factor=exp(-dE/(RT));
 				double r = randnum(0.0,1.0);
-				std::cout << "randnum is " << r << " and factor is " << factor << std::endl;
 				
 				if (r < factor){
 					lattice[i][j] = updated_spin;
+					configfile << i << "\t";
+					configfile << j << "\t";
+					configfile << lattice[i][j] << "\n";
+
+
 					E = E + dE;
-					std::cout << "Accepted although dE is positive " << dE << std::endl;
+					// std::cout << "dE is positive, dE is " << dE << "factor is " << factor << "randnum is " << r << std::endl;
+				}
+				else{
+					configfile << i << "\t";
+					configfile << j << "\t";
+					configfile << "Unchanged" << "\n";	
 				}
 			}
-			std::cout << E << std::endl;
+			energyfile << E;
+			energyfile << "\n";
 		}
 	}
+	energyfile.close();
+	configfile.close();
+	std::cout << "Final energy is " << E << std::endl;
 }
