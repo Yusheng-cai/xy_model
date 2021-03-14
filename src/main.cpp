@@ -2,13 +2,24 @@
 #include <ctime>
 #include <stdlib.h>
 #include "xy_model.h"
+#include <string>
 
 int main(int argc, char** argv){
 	std::srand(std::time(0));
 	int N = atoi(argv[1]);
-	double J = 2;
-	double T = 300;
+	int nsweeps = atoi(argv[2]);
+	double T = atof(argv[3]);
+	double J = atof(argv[4]);
 
-	xy_model::run(N,0,J,T);
+	if(argc > 5){	
+		std::string energyname = argv[5];
+		std::string configname = argv[6];
+		xy_model::run(N,nsweeps,J,T,energyname,configname);
+	}
+	else{
+		xy_model::run(N,nsweeps,J,T);
+	}
+
+
 	return 0;
 }
