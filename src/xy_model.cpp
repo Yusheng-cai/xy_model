@@ -9,15 +9,14 @@
 
 #define PI 3.14159265
 #define RAD 3.14159265/180.0
-#define R 0.008314
 
 double xy_model::randnum(double low, double high){
 	/*
 	 * Function that generates a uniformly generated random number between low and high
 	 *
 	 * Args:
-	 * low(float): The lower bound of the random number 
-	 * high(float): THe upper bound of the random number 
+	 * low(double): The lower bound of the random number 
+	 * high(double): THe upper bound of the random number 
 	 *
 	 * Returns:
 	 * (double): A random number between 0 and 1
@@ -76,9 +75,9 @@ std::vector<std::vector<double>> xy_model::Random_initialize(int N){
 	return lattice;	
 }
 
-double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,double J){
+double xy_model::E_initial(const std::vector<std::vector<double>>& lattice){
 	/*
-	 * Function that calculates the energy of the initial spin system 
+	 * Function that calculates the energy of the initial spin system E/J
 	 *
 	 * Args:
 	 * lattice(std::vector<std::vector<double>>): lattice of the angles on the lattice formed with positive x direction
@@ -133,16 +132,16 @@ double xy_model::E_initial(const std::vector<std::vector<double>> &lattice,doubl
 			rval = lattice[i][j+1];
 		}
 
-		energy +=-J*(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
+		energy +=-(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
 				cos((currval-dval)*RAD));	
 	}
 
 	return energy/2.0;
 }
 
-double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, double updated_spin,int i, int j,double J){
+double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, double updated_spin,int i, int j){
 	/*
-	 * Function that calculates the change of energy from changing the spin
+	 * Function that calculates the unitless change of energy from changing the spin dE/J
 	 * 
 	 * Args:
 	 * lattice(std::vector<std::vector<double>>): A lattice that holds all the spins
@@ -153,8 +152,8 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
 	 * Return:
 	 * deltaE(double): The change of energy upon changing the spin
 	 */
-	double rows=lattice.size();
-	double cols=lattice[0].size();
+	int rows=lattice.size();
+	int cols=lattice[0].size(); 
 	double uval,dval,lval,rval;
 	
 	double currspin = lattice[i][j];
@@ -190,69 +189,111 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
 		rval = lattice[i][j+1];
 	}
 
-	double dE =J*(cos((currspin-rval)*RAD) - cos((updated_spin-rval)*RAD)+\
+	double dE =cos((currspin-rval)*RAD) - cos((updated_spin-rval)*RAD)+\
 			cos((currspin-lval)*RAD) - cos((updated_spin-lval)*RAD)+\
-			cos((currspin-uval)*RAD) - cos((updated_spin-uval)*RAD)+cos((currspin-dval)*RAD) - cos((updated_spin - dval)*RAD));	
+			cos((currspin-uval)*RAD) - cos((updated_spin-uval)*RAD)+\
+			cos((currspin-dval)*RAD) - cos((updated_spin - dval)*RAD);	
 	
        return dE;	
 }	
 
-void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::string CONFIG){
+void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string CONFIG,int printevery){
 	/*
 	 * Run function for the MCMC of xy model
 	 * 
 	 * Args
 	 * N(int): The number of elements in each direction
 	 * nsweeps(int): Number of sweeps to be performed 
-	 * J(double): The energy constant in -J*cos(thetai-thetaj)
-	 * T(double): The temperature of the system
+	 * kbTJ(double): kbT/J
 	 */
 	
 	omp_set_num_threads(8);
+	// updated set to false initially
+	bool updated = 0;
+
 	// Initialized random lattice
 	std::vector<std::vector<double>> lattice=Random_initialize(N);
+	double cosaverage = 0.0;
+	double sinaverage = 0.0;
+	double cos2average = 0.0;
+	double sin2average = 0.0;
+	double N2 = N*N;
+	double N4 = N2*N2;
+	int iteration = 1;
 
 	// create the files to be written to 
 	std::ofstream energyfile;
 	std::ofstream configfile;
 	energyfile.open(ENERGY,std::ios::out);
-	energyfile << "Energy\tAverage Cosine\tAverage Sine";
 	configfile.open(CONFIG,std::ios::out);	
+	energyfile << "Energy(unitless)\tAverage Cosine\tAverage Sine\tAverage E\n";
 
-	// Calculate initial energy
-	double E = E_initial(lattice,J);
-	std::cout << "Initial E is " << E << std::endl;
-	double RT = R*T;	
+	// Calculate initial energy unitless
+	double E = E_initial(lattice);
+	double E_avg = E;
+	std::cout << "Initial unitless energy E/J is " << E << std::endl;
+
+	// Calculate the average cosine and sin theta	
+	#pragma omp parallel for shared(lattice) reduction(+:cosaverage,sinaverage)	
+	for(int k=0;k<N*N;k++){
+		int i=k/N;
+		int j=k%N;
+		double c = cos(lattice[i][j]*RAD)/N2;
+		double s = sin(lattice[i][j]*RAD)/N2;
+		cosaverage += c; 
+		sinaverage += s;
+	}
+
 	
 	for(int m=0;m<nsweeps;m++){
 		for(int k=0;k<N*N;k++){
+			updated = 0;
+			double old=0;
 			int num = (int)round(randnum(0.0,1.0)*(N*N-1));
 			int i=num/N;
 			int j=num%N;
 			
 			double updated_spin = rotatespin(lattice[i][j]); 
-			double dE = calc_deltaE(lattice,updated_spin,i,j,J);
+			double dE = calc_deltaE(lattice,updated_spin,i,j);
 			
 			// if dE is less than 0, then accept the move
 			if (dE < 0){
+				old = lattice[i][j];
 				lattice[i][j] = updated_spin;
 				E = E + dE;
-				// std::cout << "Accepted because dE is negative and dE: " << dE << std::endl;
+
+				updated = 1;
 			}
 			else{
-				double factor=exp(-dE/(RT));
+				double factor=exp(-dE/(kbTJ));
 				double r = randnum(0.0,1.0);
 				
 				if (r < factor){
+					old = lattice[i][j];
 					lattice[i][j] = updated_spin;
-
 					E = E + dE;
-					// std::cout << "dE is positive, dE is " << dE << "factor is " << factor << "randnum is " << r << std::endl;
+
+					updated = 1;
 				}
 				
 			}
-			energyfile << E <<  "\n";
+			E_avg = (E_avg*iteration + E)/(iteration + 1);
+			iteration += 1;
+
+			if(iteration %printevery == 0){
+				if(updated == 1){
+					double cosold = cos(old*RAD);
+					double cosnew = cos(lattice[i][j]*RAD);
+					double sinold = sin(old*RAD);
+					double sinnew = sin(lattice[i][j]*RAD);
+
+					cosaverage = (cosaverage*N2 - cosold + cosnew)/N2;
+					sinaverage = (sinaverage*N2 - sinold + sinnew)/N2;
+				}
+				energyfile << iteration << "\t" << E <<"\t" << cosaverage << "\t" << sinaverage << "\n";
+			}
 		}
+
 		for(int i=0;i<N;i++){
 			for(int j=0;j<N;j++){
 				configfile << lattice[i][j] << "\t";
@@ -263,5 +304,6 @@ void xy_model::run(int N,int nsweeps,double J,double T,std::string ENERGY, std::
 
 	energyfile.close();
 	configfile.close();
-	std::cout << "Final energy is " << E << std::endl;
+	std::cout << "Final unitless energy is " << E << std::endl;
+	std::cout << "Average energy after " << iteration << " and " << nsweeps <<" sweeps is " << E_avg << std::endl;
 }

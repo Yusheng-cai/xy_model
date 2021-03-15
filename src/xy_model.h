@@ -11,10 +11,10 @@ namespace xy_model{
 
 	std::vector<std::vector<double>> Random_initialize(int);
 
-	double E_initial(const std::vector<std::vector<double>>&,double);
+	double E_initial(const std::vector<std::vector<double>>&);
 
-	double calc_deltaE(const std::vector<std::vector<double>>&,double,int,int,double);
+	double calc_deltaE(const std::vector<std::vector<double>>&,double,int,int);
 
-	void run(int N,int nsweeps,double J,double T,std::string ENERGY="energy.dat",std::string CONFIG="config.dat");
+	void run(int,int,double,std::string ENERGY="energy.dat",std::string CONFIG="config.dat",int printevery=1000);
 }
 
