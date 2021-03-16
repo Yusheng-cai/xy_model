@@ -24,7 +24,7 @@ double xy_model::randnum(double low, double high){
 	return low + (double) (high-low)*rand()/RAND_MAX;	
 }
 
-double xy_model::rotatespin(const double &angle){
+double xy_model::rotatespin(const double& angle){
 	/*
 	 * Function that rotates an spin on the lattice by a random angle 
 	 * will return a number between -180 and 180 for sure
@@ -132,7 +132,7 @@ double xy_model::E_initial(const std::vector<std::vector<double>>& lattice){
 			rval = lattice[i][j+1];
 		}
 
-		energy +=-(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
+		energy += -(cos((currval-rval)*RAD)+cos((currval-lval)*RAD)+cos((currval-uval)*RAD)+\
 				cos((currval-dval)*RAD));	
 	}
 
@@ -208,29 +208,31 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 	 */
 	
 	omp_set_num_threads(8);
+
 	// updated set to false initially
 	bool updated = 0;
-
-	// Initialized random lattice
-	std::vector<std::vector<double>> lattice=Random_initialize(N);
+	double iteration = 1.0;
 	double cosaverage = 0.0;
 	double sinaverage = 0.0;
-	double cos2average = 0.0;
-	double sin2average = 0.0;
 	double N2 = N*N;
-	double N4 = N2*N2;
-	int iteration = 1;
+
+
+	// Initialized random lattice 
+	std::vector<std::vector<double>> lattice=Random_initialize(N);
 
 	// create the files to be written to 
 	std::ofstream energyfile;
 	std::ofstream configfile;
 	energyfile.open(ENERGY,std::ios::out);
 	configfile.open(CONFIG,std::ios::out);	
-	energyfile << "Energy(unitless)\tAverage Cosine\tAverage Sine\tAverage E\n";
+	energyfile << "Energy(unitless)\tAverage Cosine\tAverage Sine\n";
+
 
 	// Calculate initial energy unitless
 	double E = E_initial(lattice);
 	double E_avg = E;
+	double E2_avg = E*E;
+
 	std::cout << "Initial unitless energy E/J is " << E << std::endl;
 
 	// Calculate the average cosine and sin theta	
@@ -248,15 +250,19 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 	for(int m=0;m<nsweeps;m++){
 		for(int k=0;k<N*N;k++){
 			updated = 0;
+			// old lattice value
 			double old=0;
+
+			// random number to decide which lattice to perform calculation on
 			int num = (int)round(randnum(0.0,1.0)*(N*N-1));
 			int i=num/N;
 			int j=num%N;
-			
+		
+			// update spin and calculate change in energy	
 			double updated_spin = rotatespin(lattice[i][j]); 
 			double dE = calc_deltaE(lattice,updated_spin,i,j);
 			
-			// if dE is less than 0, then accept the move
+			// if dE is less than 0, then accept the move, else accept with MC criteria 
 			if (dE < 0){
 				old = lattice[i][j];
 				lattice[i][j] = updated_spin;
@@ -277,10 +283,16 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 				}
 				
 			}
-			E_avg = (E_avg*iteration + E)/(iteration + 1);
-			iteration += 1;
+			// Update average energy and variance
+			if (m >= (double)nsweeps*0.5){
+				E2_avg  = (E2_avg*iteration + E*E)/(iteration+1); 
+				E_avg = (E_avg*iteration + E)/(iteration + 1);
+				iteration += 1;
+			}
 
-			if(iteration %printevery == 0){
+				
+			// write to energy file every printevery
+			if((int)iteration %printevery == 0){
 				if(updated == 1){
 					double cosold = cos(old*RAD);
 					double cosnew = cos(lattice[i][j]*RAD);
@@ -294,16 +306,22 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 			}
 		}
 
-		for(int i=0;i<N;i++){
-			for(int j=0;j<N;j++){
-				configfile << lattice[i][j] << "\t";
-		}
-			configfile << "\n";
-		}
-	}
+		// store coordinates every 10 sweeps
+		if(m % 10 == 0){
+			for(int i=0;i<N;i++){
+				for(int j=0;j<N;j++){
+					configfile << lattice[i][j] << "\t";
+				}
+				configfile << "\n";
+			}
+			}
+}
 
+	double variance = E2_avg - pow(E_avg,2);
 	energyfile.close();
 	configfile.close();
 	std::cout << "Final unitless energy is " << E << std::endl;
 	std::cout << "Average energy after " << iteration << " and " << nsweeps <<" sweeps is " << E_avg << std::endl;
+	std::cout << "Variance of energy after " << iteration << " and " << nsweeps << " sweeps is " << variance << std::endl;
+	std::cout << "Heat capactiy is " << variance/(N*N*pow(kbTJ,2)) << std::endl;
 }
