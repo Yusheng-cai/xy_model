@@ -18,6 +18,7 @@ int main(int argc, char* argv[]){
 	int opt;
 	int N=0;
 	int nsweeps=0;
+	double r=0.5;
 	int printevery=1000;
 	double kbTJ=0.0;
 	std::string energyname="energy.dat";
@@ -26,7 +27,7 @@ int main(int argc, char* argv[]){
 
 	
 	for(;;){	
-		switch(getopt(argc,argv,"n:s:k:")){
+		switch(getopt(argc,argv,"n:s:k:r:")){
 		case 'n':
 			N=atoi(optarg);
 			continue;
@@ -36,6 +37,9 @@ int main(int argc, char* argv[]){
 		case 'k':
 			kbTJ=atof(optarg);
 			break;
+		case 'r':
+			r=atof(optarg);
+			break;
 			}
 		break;
 	}
@@ -43,7 +47,7 @@ int main(int argc, char* argv[]){
 	std::cout << N << std::endl;
 	std::cout << nsweeps << std::endl;
 	std::cout << kbTJ << std::endl;
-	xy_model::run(N,nsweeps,kbTJ,energyname,configname,propertyname,printevery);
+	xy_model::run(N,nsweeps,kbTJ,r,energyname,configname,propertyname,printevery);
 	
 
 	return 0;
