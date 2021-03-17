@@ -190,7 +190,7 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
        return dE;	
 }	
 
-void xy_model::run(int N,int nsweeps,double kbTJ,std::string EDR, std::string XTC,std::string P,int printevery){
+void xy_model::run(int N,int nsweeps,double kbTJ,double r,std::string EDR, std::string XTC,std::string P,int printevery){
 	/*
 	 * Run function for the MCMC of xy model
 	 * 
@@ -198,6 +198,11 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string EDR, std::string XT
 	 * N(int): The number of elements in each direction
 	 * nsweeps(int): Number of sweeps to be performed 
 	 * kbTJ(double): kbT/J
+	 * r(double): The raio of sweeps to start performing averaging
+	 * EDR(std::string): A string for the name of the energy file output
+	 * XTC(std::string): A string for the name of the configuration file output
+	 * P(std::string): A string for the name of the property file output
+	 * printevery(int): The frequency of iterations at which to write data to energy file
 	 */
 	
 	omp_set_num_threads(8);
@@ -279,7 +284,7 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string EDR, std::string XT
 				
 			}
 			// Update average energy and variance
-			if (m >= (double)nsweeps*0.1){
+			if (m >= (double)nsweeps*r){
 				E2_avg  = (E2_avg*iteration + E*E)/(iteration+1); 
 				E_avg = (E_avg*iteration + E)/(iteration + 1);
 				iteration += 1;

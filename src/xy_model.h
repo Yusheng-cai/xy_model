@@ -22,6 +22,6 @@ namespace xy_model{
 
 	double calc_deltaE(const std::vector<std::vector<double>>&,double,int,int);
 
-	void run(int,int,double,std::string,std::string,std::string,int printevery=1000);
+	void run(int,int,double,double,std::string,std::string,std::string,int printevery=1000);
 }
 
