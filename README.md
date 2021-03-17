@@ -13,7 +13,7 @@ make install
 ## Usage
 
 ```bash
-MCMC [-n N] [-s nsweeps] [-k kbT/J]
+xy [-n N] [-s nsweeps] [-k kbT/J]
 ```
 
 ## Test

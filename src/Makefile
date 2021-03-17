@@ -4,7 +4,7 @@
 #  	action
 
 GCC=/usr/local/bin/g++
-OUTPUT=MCMC
+OUTPUT=xy
 INSTALLDIR=/usr/local/bin/
 
 all:$(OUTPUT)
