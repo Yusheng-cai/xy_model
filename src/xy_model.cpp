@@ -1,11 +1,4 @@
 #include "xy_model.h"
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <vector>
-#include <omp.h>
-
 
 #define PI 3.14159265
 #define RAD 3.14159265/180.0
@@ -197,7 +190,7 @@ double xy_model::calc_deltaE(const std::vector<std::vector<double>> &lattice, do
        return dE;	
 }	
 
-void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string CONFIG,int printevery){
+void xy_model::run(int N,int nsweeps,double kbTJ,std::string EDR, std::string XTC,std::string P,int printevery){
 	/*
 	 * Run function for the MCMC of xy model
 	 * 
@@ -223,8 +216,10 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 	// create the files to be written to 
 	std::ofstream energyfile;
 	std::ofstream configfile;
-	energyfile.open(ENERGY,std::ios::out);
-	configfile.open(CONFIG,std::ios::out);	
+	std::ofstream propertyfile;
+	energyfile.open(EDR,std::ios::out);
+	configfile.open(XTC,std::ios::out);	
+	propertyfile.open(P,std::ios::out);
 	energyfile << "Energy(unitless)\tAverage Cosine\tAverage Sine\n";
 
 
@@ -284,7 +279,7 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 				
 			}
 			// Update average energy and variance
-			if (m >= (double)nsweeps*0.5){
+			if (m >= (double)nsweeps*0.1){
 				E2_avg  = (E2_avg*iteration + E*E)/(iteration+1); 
 				E_avg = (E_avg*iteration + E)/(iteration + 1);
 				iteration += 1;
@@ -320,8 +315,9 @@ void xy_model::run(int N,int nsweeps,double kbTJ,std::string ENERGY, std::string
 	double variance = E2_avg - pow(E_avg,2);
 	energyfile.close();
 	configfile.close();
-	std::cout << "Final unitless energy is " << E << std::endl;
-	std::cout << "Average energy after " << iteration << " and " << nsweeps <<" sweeps is " << E_avg << std::endl;
-	std::cout << "Variance of energy after " << iteration << " and " << nsweeps << " sweeps is " << variance << std::endl;
-	std::cout << "Heat capactiy is " << variance/(N*N*pow(kbTJ,2)) << std::endl;
+
+	propertyfile<< "Average energy (unitless): " << E_avg << "\n";
+	propertyfile<< "Variance : " << variance << "\n";
+	propertyfile<< "Heat capacity (kbT): " << variance/(N*N*pow(kbTJ,2)) << "\n";
+	propertyfile.close();
 }
